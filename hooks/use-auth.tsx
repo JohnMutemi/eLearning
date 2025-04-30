@@ -54,11 +54,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isLoading) {
       const isAuthRoute = pathname?.startsWith('/auth');
+      const isDashboardRoute = pathname?.startsWith('/dashboard');
 
-      if (!user && !isAuthRoute && pathname !== '/') {
+      if (!user && isDashboardRoute) {
         router.push('/auth/login');
       } else if (user && isAuthRoute) {
-        router.push('/');
+        // Redirect to appropriate dashboard based on role
+        if (user.role === 'admin') {
+          router.push('/dashboard/admin');
+        } else if (user.role === 'tutor') {
+          router.push('/dashboard/tutor');
+        } else {
+          router.push('/dashboard/learner');
+        }
       }
     }
   }, [user, isLoading, pathname, router]);

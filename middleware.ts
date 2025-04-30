@@ -1,44 +1,60 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
+// Define role-based access control
+const roleAccess = {
+  admin: ["/dashboard/admin", "/dashboard/admin/*"],
+  tutor: ["/dashboard/tutor", "/dashboard/tutor/*"],
+  learner: ["/dashboard/learner", "/dashboard/learner/*"],
+}
+
+// Public paths that don't require authentication
+const publicPaths = ["/", "/auth/login", "/auth/register", "/auth/reset-password"]
+
 // This function can be marked `async` if using `await` inside
 export function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
+  const token = request.cookies.get("accessToken")?.value
+  const userRole = request.cookies.get("userRole")?.value
 
-  // Define public paths that don't require authentication
-  const isPublicPath = path.startsWith("/auth") || path === "/"
+  // Check if path is public
+  const isPublicPath = publicPaths.some(publicPath => 
+    path === publicPath || path.startsWith(publicPath)
+  )
 
-  // Check if user is authenticated
-  const token = request.cookies.get("accessToken")?.value || ""
-
-  // Redirect logic
+  // Handle unauthenticated access
   if (!isPublicPath && !token) {
-    // Redirect to login if trying to access protected route without token
     return NextResponse.redirect(new URL("/auth/login", request.url))
   }
 
+  // Handle authenticated access to public paths
   if (isPublicPath && token && path.startsWith("/auth")) {
-    // Get user role from token or use a default
-    // In a real app, you would decode the JWT to get the role
-    const role = "learner" // Default role
+    // Redirect to appropriate dashboard based on role
+    const dashboardPath = userRole ? `/dashboard/${userRole}` : "/dashboard/learner"
+    return NextResponse.redirect(new URL(dashboardPath, request.url))
+  }
 
-    // Redirect to appropriate dashboard if already logged in
-    return NextResponse.redirect(new URL(`/dashboard/${role}`, request.url))
+  // Handle role-based access control
+  if (token && userRole) {
+    const allowedPaths = roleAccess[userRole as keyof typeof roleAccess] || []
+    const hasAccess = allowedPaths.some(allowedPath => 
+      path === allowedPath || path.startsWith(allowedPath.replace("/*", ""))
+    )
+
+    if (!hasAccess) {
+      // Redirect to appropriate dashboard if trying to access unauthorized route
+      return NextResponse.redirect(new URL(`/dashboard/${userRole}`, request.url))
+    }
   }
 
   return NextResponse.next()
 }
 
-// See "Matching Paths" below to learn more
+// Configure which paths the middleware should run on
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/dashboard/:path*",
+    "/auth/:path*",
+    "/",
   ],
 }

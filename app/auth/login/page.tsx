@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
+import { authService } from "@/services/auth-service"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -27,48 +28,15 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // Simulate different user roles based on email
-      let userRole = "learner" // default role
-
-      if (email === "admin@example.com") {
-        userRole = "admin"
-      } else if (email === "sarah.johnson@example.com" || email === "michael.chen@example.com") {
-        userRole = "tutor"
-      }
-
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Create mock response
-      const mockResponse = {
-        access: "mock-token",
-        refresh: "mock-refresh-token",
-        user: {
-          id: 1,
-          email: email,
-          first_name: email.split("@")[0].split(".")[0],
-          last_name: email.split("@")[0].split(".")[1] || "",
-          role: userRole,
-        },
-      }
-
-      // Store tokens in localStorage
-      localStorage.setItem("accessToken", mockResponse.access)
-      localStorage.setItem("refreshToken", mockResponse.refresh)
-
+      const response = await authService.login(email, password)
+      
       toast({
         title: "Login successful",
-        description: "Welcome back to Edu-LMS!",
+        description: `Welcome back, ${response.user.first_name}!`,
       })
 
       // Redirect based on user role
-      if (userRole === "admin") {
-        router.push("/dashboard/admin")
-      } else if (userRole === "tutor") {
-        router.push("/dashboard/tutor")
-      } else {
-        router.push("/dashboard/learner")
-      }
+      router.push(`/dashboard/${response.user.role}`)
     } catch (error) {
       toast({
         title: "Login failed",

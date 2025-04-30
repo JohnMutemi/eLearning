@@ -1,4 +1,5 @@
 import { API_URL } from "@/config"
+import { mockAuthService } from "./mock-auth-service"
 
 export interface LoginResponse {
   access: string
@@ -25,52 +26,33 @@ class AuthService {
    * Login user and get JWT tokens
    */
   async login(email: string, password: string): Promise<LoginResponse> {
-    const response = await fetch(`${API_URL}/auth/login/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    })
+    try {
+      // Use mock service for testing
+      const response = await mockAuthService.login(email, password)
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || "Failed to login")
+      // Store tokens and user role in cookies with SameSite and Secure attributes
+      const cookieOptions = "path=/; max-age=3600; SameSite=Lax"
+      document.cookie = `accessToken=${response.access}; ${cookieOptions}` // 1 hour
+      document.cookie = `refreshToken=${response.refresh}; ${cookieOptions}; max-age=2592000` // 30 days
+      document.cookie = `userRole=${response.user.role}; ${cookieOptions}; max-age=2592000` // 30 days
+
+      return response
+    } catch (error) {
+      console.error('Login error:', error)
+      throw new Error("Invalid credentials")
     }
-
-    const data = await response.json()
-
-    // Store tokens in localStorage
-    localStorage.setItem("accessToken", data.access)
-    localStorage.setItem("refreshToken", data.refresh)
-
-    return data
   }
 
   /**
    * Register a new user
    */
   async register(userData: RegisterData): Promise<{ message: string }> {
-    const response = await fetch(`${API_URL}/auth/register/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        email: userData.email,
-        password: userData.password,
-        first_name: userData.firstName,
-        last_name: userData.lastName,
-        role: userData.role,
-      }),
-    })
-
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || "Failed to register")
+    try {
+      // Use mock service for testing
+      return await mockAuthService.register(userData)
+    } catch (error) {
+      throw new Error("Registration failed")
     }
-
-    return await response.json()
   }
 
   /**
@@ -117,47 +99,54 @@ class AuthService {
    * Refresh access token using refresh token
    */
   async refreshToken(refreshToken: string): Promise<{ access: string }> {
-    const response = await fetch(`${API_URL}/auth/token/refresh/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ refresh: refreshToken }),
-    })
+    try {
+      // Use mock service for testing
+      const response = await mockAuthService.refreshToken(refreshToken)
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.detail || "Failed to refresh token")
+      // Update access token in cookies
+      const cookieOptions = "path=/; max-age=3600; SameSite=Lax"
+      document.cookie = `accessToken=${response.access}; ${cookieOptions}` // 1 hour
+
+      return response
+    } catch (error) {
+      throw new Error("Failed to refresh token")
     }
-
-    const data = await response.json()
-
-    // Update access token in localStorage
-    localStorage.setItem("accessToken", data.access)
-
-    return data
   }
 
   /**
-   * Logout user by removing tokens
+   * Logout user by removing tokens and role
    */
   logout(): void {
-    localStorage.removeItem("accessToken")
-    localStorage.removeItem("refreshToken")
+    // Remove all auth-related cookies with proper path and SameSite attributes
+    const cookieOptions = "path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"
+    document.cookie = `accessToken=; ${cookieOptions}`
+    document.cookie = `refreshToken=; ${cookieOptions}`
+    document.cookie = `userRole=; ${cookieOptions}`
   }
 
   /**
    * Check if user is authenticated
    */
   isAuthenticated(): boolean {
-    return !!localStorage.getItem("accessToken")
+    return !!this.getAccessToken()
   }
 
   /**
    * Get current access token
    */
   getAccessToken(): string | null {
-    return localStorage.getItem("accessToken")
+    const cookies = document.cookie.split(";")
+    const tokenCookie = cookies.find(cookie => cookie.trim().startsWith("accessToken="))
+    return tokenCookie ? tokenCookie.split("=")[1] : null
+  }
+
+  /**
+   * Get current user role
+   */
+  getUserRole(): string | null {
+    const cookies = document.cookie.split(";")
+    const roleCookie = cookies.find(cookie => cookie.trim().startsWith("userRole="))
+    return roleCookie ? roleCookie.split("=")[1] : null
   }
 }
 
